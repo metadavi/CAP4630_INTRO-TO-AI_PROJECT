@@ -1,3 +1,5 @@
+#CAP4630_INTRO-TO-AI_PROJECT
+
 # AI Vehicle Access Control (ALPR)
 
 An AI-powered access control system that automatically validates vehicle entry using license plate recognition and confidence-based decision logic.

@@ -83,6 +83,14 @@ class OCRReader:
         if len(kept_chars) < config.MIN_PLATE_CHARS:
             return "", 0.0
 
+        if len(kept_chars) > config.MAX_PLATE_CHARS:
+            return "", 0.0
+
+        # Reject readings that are nearly all the same character —
+        # these come from repeating background patterns (grilles, lattices, etc.)
+        if len(set(kept_chars)) < config.MIN_UNIQUE_CHARS:
+            return "", 0.0
+
         plate_text = "".join(kept_chars)
         mean_conf  = sum(kept_confs) / len(kept_confs)
 

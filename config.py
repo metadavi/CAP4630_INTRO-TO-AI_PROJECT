@@ -37,7 +37,9 @@ MIN_CHAR_AREA       = 80        # px² — blobs smaller than this are noise
 MIN_CHAR_HEIGHT     = 10        # px
 MAX_CHAR_HEIGHT_RATIO = 0.95    # char height / plate height — full-height blobs are borders
 CHAR_CONF_THRESHOLD = 0.40      # Per-character confidence to include in reading
-MIN_PLATE_CHARS     = 4         # Minimum characters for a valid plate reading
+MIN_PLATE_CHARS     = 5         # Minimum characters for a valid plate reading (US plates are 5-7)
+MAX_PLATE_CHARS     = 8         # Maximum — more than this is likely a false positive
+MIN_UNIQUE_CHARS    = 3         # Reject readings whose characters are all the same (e.g. IIIIII)
 
 # ── Multi-frame Voting ─────────────────────────────────────────────────────
 VOTE_WINDOW         = 5         # Accumulate this many frames before deciding

@@ -1,34 +1,99 @@
-# Python
+# ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
-*.py[cod]
+*.py[codz]
+*$py.class
+*.so
 *.pyo
 *.pyd
 .Python
-*.egg-info/
-dist/
-build/
 
-# Virtual environment
+# ── Distribution / packaging ──────────────────────────────────────────────────
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.manifest
+*.spec
+
+# ── Installer logs ────────────────────────────────────────────────────────────
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ── Testing / coverage ────────────────────────────────────────────────────────
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py.cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+.env
+.envrc
 .venv/
 venv/
 env/
+ENV/
+env.bak/
+venv.bak/
 
-# Jupyter
-.ipynb_checkpoints/
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints
+profile_default/
+ipython_config.py
 
-# macOS
+# ── Type checkers / linters ───────────────────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+cython_debug/
+
+# ── IDE / editor ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+.spyderproject
+.spyproject
+.ropeproject
+.cursorignore
+.cursorindexingignore
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
 .DS_Store
 
-# Training datasets (1 GB+ — download separately for training)
+# ── Project-specific ─────────────────────────────────────────────────────────
+# Training datasets (1 GB+ of images — download separately for training)
 data/datasets/
 
-# Logs (keep directory, ignore log files)
+# Runtime log files
 data/logs/*.csv
 
-# Secrets / credentials (never commit these)
-.env
+# ── Secrets / credentials (NEVER commit these) ────────────────────────────────
 .env.*
 *.key
 *.pem
 credentials.*
 secrets.*
+.pypirc

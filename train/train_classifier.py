@@ -77,10 +77,11 @@ def get_loaders(batch_size: int, train_split: float):
     # Give the val split the val transforms
     val_ds.dataset = datasets.ImageFolder(DATA_DIR, transform=val_tf)
 
+    pin = torch.cuda.is_available()   # pin_memory only works on CUDA, not MPS
     train_loader = DataLoader(train_ds, batch_size=batch_size,
-                              shuffle=True,  num_workers=2, pin_memory=torch.cuda.is_available())
+                              shuffle=True,  num_workers=2, pin_memory=pin)
     val_loader   = DataLoader(val_ds,   batch_size=batch_size,
-                              shuffle=False, num_workers=2, pin_memory=torch.cuda.is_available())
+                              shuffle=False, num_workers=2, pin_memory=pin)
 
     print(f"[train_classifier] {n_train} train  |  {n_val} val")
     return train_loader, val_loader, loaded_classes

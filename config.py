@@ -25,6 +25,7 @@ MAX_PLATE_AREA      = 100000   # higher to catch large close-up plates
 ASPECT_RATIO_MIN    = 1.5       # looser lower bound (angled/phone-screen plates)
 ASPECT_RATIO_MAX    = 6.0
 MIN_PLATE_BRIGHTNESS = 60       # mean grayscale brightness — filters dark brick/wall contours
+MIN_PLATE_SOLIDITY  = 0.70      # contour area / convex hull area — rejects fingers/cables
 
 # ── Character Classifier CNN ───────────────────────────────────────────────
 CHAR_IMG_SIZE       = (32, 32)  # Input size for the character CNN (H, W)
@@ -42,9 +43,9 @@ MAX_PLATE_CHARS     = 8         # Maximum — more than this is likely a false p
 MIN_UNIQUE_CHARS    = 3         # Reject readings whose characters are all the same (e.g. IIIIII)
 
 # ── Multi-frame Voting ─────────────────────────────────────────────────────
-VOTE_WINDOW         = 5         # Accumulate this many frames before deciding
-VOTE_MIN_HITS       = 2         # Plate string must appear ≥ this many times
-VOTE_CONF_THRESHOLD = 0.60      # Aggregated confidence → ALLOWED
+VOTE_WINDOW         = 7         # Accumulate this many frames before deciding
+VOTE_MIN_HITS       = 3         # Plate string must appear ≥ this many times (was 2)
+VOTE_CONF_THRESHOLD = 0.55      # Aggregated confidence → ALLOWED (EasyOCR scores differ)
 
 # ── Access Control ─────────────────────────────────────────────────────────
 UNCERTAIN_THRESHOLD = 0.40      # Below this → UNCERTAIN (not DENIED)
@@ -59,6 +60,7 @@ TRAIN_SPLIT         = 0.80      # 80 % train, 20 % validation
 # ── Display ────────────────────────────────────────────────────────────────
 SHOW_WINDOW         = True
 FRAME_SKIP          = 2         # Process every Nth frame (1 = every frame)
+BBOX_SMOOTH_ALPHA   = 0.5       # EMA weight for bbox smoothing (0=frozen, 1=raw)
 
 # ── Gatekeeper Mode ───────────────────────────────────────────────────────
 GATEKEEPER_MODE       = True        # Enable interactive registration prompts

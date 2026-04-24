@@ -227,13 +227,14 @@ def run_pipeline(source,
     Main loop: read frames from `source` (cv2.VideoCapture or a single image
     wrapped as an iterator), run the ALPR pipeline, display results.
     """
-    frame_idx      = 0
-    last_bbox      = None
-    last_plate_txt = ""       # most recent OCR reading (shown live on bbox)
-    last_plate_conf= 0.0
-    fps_t          = time.time()
-    fps            = 0.0
-    gate           = GateState()
+    frame_idx       = 0
+    last_bbox       = None
+    _smooth_bbox    = None    # exponential-moving-average box (reduces jitter)
+    last_plate_txt  = ""      # most recent OCR reading (shown live on bbox)
+    last_plate_conf = 0.0
+    fps_t           = time.time()
+    fps             = 0.0
+    gate            = GateState()
 
     while True:
         ret, frame = source.read()
@@ -275,6 +276,7 @@ def run_pipeline(source,
             detections = detector.detect(frame)
 
             if not detections:
+                _smooth_bbox = None   # reset smoothing when plate leaves frame
                 _show_frame(frame, None, gate, fps, frame_idx,
                             voter.buffer_size, last_plate_txt, last_plate_conf)
                 key = cv2.waitKey(1) & 0xFF
@@ -285,7 +287,19 @@ def run_pipeline(source,
                 continue
 
             best = detections[0]
-            bbox = best["bbox"]
+            raw_bbox = best["bbox"]
+
+            # Smooth bbox position across frames to remove jitter.
+            # alpha=0.5: new pos pulls box halfway toward detected pos each frame.
+            alpha = config.BBOX_SMOOTH_ALPHA
+            if _smooth_bbox is None:
+                _smooth_bbox = raw_bbox
+            else:
+                _smooth_bbox = tuple(
+                    int(alpha * n + (1 - alpha) * p)
+                    for n, p in zip(raw_bbox, _smooth_bbox)
+                )
+            bbox = _smooth_bbox
             crop = best["crop"]
 
             # Stage 2: Read plate text

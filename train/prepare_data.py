@@ -67,6 +67,7 @@ import config
 
 # ── Constants ──────────────────────────────────────────────────────────────
 
+# Plate detector: use the large YOLO-format train split (7 k images)
 RAW_PLATE_DIR   = "data/train"
 OUT_DETECTOR    = "data/datasets/detector"
 RAW_CHARS_DIR   = "data/datasets/chars"

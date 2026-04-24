@@ -166,6 +166,12 @@ class PlateDetector:
             if not (config.ASPECT_RATIO_MIN <= aspect <= config.ASPECT_RATIO_MAX):
                 continue
 
+            # Reject non-rectangular blobs (fingers, cables, irregular shapes).
+            # Solidity = contour_area / convex_hull_area — plates are convex.
+            hull_area = cv2.contourArea(cv2.convexHull(cnt))
+            if hull_area > 0 and (area / hull_area) < config.MIN_PLATE_SOLIDITY:
+                continue
+
             # Reject dark regions (brick walls, shadows) — license plates are bright
             region = gray[y:y + h, x:x + w]
             if region.size > 0 and region.mean() < config.MIN_PLATE_BRIGHTNESS:

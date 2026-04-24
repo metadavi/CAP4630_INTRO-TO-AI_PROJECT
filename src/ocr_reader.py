@@ -84,6 +84,14 @@ class OCRReader:
     # ── EasyOCR path ────────────────────────────────────────────────────────
 
     def _read_easyocr(self, crop: np.ndarray) -> tuple[str, float]:
+        # Strip the top 18% (state name / website) and bottom 18% (tagline /
+        # dealer frame) — the actual plate characters sit in the middle band.
+        h = crop.shape[0]
+        margin = int(h * 0.18)
+        crop = crop[margin: h - margin, :]
+        if crop.shape[0] < 10:          # guard against tiny crops
+            return "", 0.0
+
         crop = self._preprocess_for_ocr(crop)
 
         results = self._reader.readtext(

@@ -15,6 +15,7 @@ Press Y / N on screen to register or deny unrecognised plates.
 import base64
 import os
 import socket as _socket
+import time
 
 import cv2
 import numpy as np
@@ -45,8 +46,9 @@ logger     = EventLogger()
 print("Ready.\n")
 
 # Per-connection state: voter keyed by socket session id
-_voters: dict[str, FrameVoter] = {}
-_busy:   dict[str, bool]       = {}   # drop frame if previous is still processing
+_voters:    dict[str, FrameVoter] = {}
+_busy:      dict[str, bool]       = {}   # drop frame if previous is still processing
+_cooldown:  dict[str, float]      = {}   # timestamp after which we resume processing
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────
@@ -62,8 +64,9 @@ def index():
 def on_connect():
     from flask import request
     sid = request.sid
-    _voters[sid] = FrameVoter()
-    _busy[sid]   = False
+    _voters[sid]   = FrameVoter()
+    _busy[sid]     = False
+    _cooldown[sid] = 0.0
 
 
 @socketio.on("disconnect")
@@ -72,6 +75,7 @@ def on_disconnect():
     sid = request.sid
     _voters.pop(sid, None)
     _busy.pop(sid, None)
+    _cooldown.pop(sid, None)
 
 
 @socketio.on("frame")
@@ -81,6 +85,9 @@ def on_frame(data):
 
     if _busy.get(sid):
         return                          # still processing previous frame
+
+    if time.time() < _cooldown.get(sid, 0.0):
+        return                          # in cooldown after a decision
 
     _busy[sid] = True
     try:
@@ -140,6 +147,7 @@ def _process_frame(sid: str, data: dict) -> None:
         )
 
         voter.reset()
+        _cooldown[sid] = time.time() + config.VOTE_COOLDOWN_SECS
 
         result.update({
             "voted_plate": voted_plate,

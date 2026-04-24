@@ -13,6 +13,7 @@ Press Y / N on screen to register or deny unrecognised plates.
 """
 
 import base64
+import os
 import socket as _socket
 
 import cv2
@@ -30,8 +31,8 @@ from src.logger         import EventLogger
 
 # ── App setup ──────────────────────────────────────────────────────────────
 
-app    = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+app      = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 
 # ── Pipeline (initialised once at startup) ─────────────────────────────────
@@ -188,16 +189,28 @@ def _local_ip() -> str:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument("--port", type=int,
+                        default=int(os.environ.get("PORT", 8080)))
+    parser.add_argument("--no-ssl", action="store_true",
+                        help="Disable self-signed SSL (use when behind a proxy)")
     args = parser.parse_args()
 
-    ip   = _local_ip()
-    port = args.port
-    print(f"╔══════════════════════════════════════╗")
-    print(f"║  ALPR Web Server                     ║")
-    print(f"║  Open on your phone (same WiFi):     ║")
-    print(f"║  https://{ip}:{port:<18}║")
-    print(f"║  (accept the certificate warning)    ║")
-    print(f"╚══════════════════════════════════════╝\n")
-    socketio.run(app, host="0.0.0.0", port=port, debug=False,
-                 ssl_context="adhoc")
+    port       = args.port
+    use_ssl    = not args.no_ssl
+    ip         = _local_ip()
+
+    if use_ssl:
+        print(f"╔══════════════════════════════════════╗")
+        print(f"║  ALPR Web Server  (local)            ║")
+        print(f"║  Open on your phone (same WiFi):     ║")
+        print(f"║  https://{ip}:{port:<18}║")
+        print(f"║  (accept the certificate warning)    ║")
+        print(f"╚══════════════════════════════════════╝\n")
+        socketio.run(app, host="0.0.0.0", port=port, debug=False,
+                     ssl_context="adhoc")
+    else:
+        print(f"╔══════════════════════════════════════╗")
+        print(f"║  ALPR Web Server  (no SSL)           ║")
+        print(f"║  http://{ip}:{port:<20}║")
+        print(f"╚══════════════════════════════════════╝\n")
+        socketio.run(app, host="0.0.0.0", port=port, debug=False)

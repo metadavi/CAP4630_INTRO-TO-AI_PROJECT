@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Large training datasets (not needed at runtime)
+data/train/
+data/valid/
+data/test/
+data/LP-characters/
+data/datasets/
+data/README.*
+data/count.txt
+data/data.yaml
+
+# Logs (runtime generated)
+data/logs/
+
+# Dev / IDE
+.vscode/
+.idea/
+.DS_Store
+.claude/
+
+# Git
+.git/
+.gitignore
+
+# Docs
+*.md

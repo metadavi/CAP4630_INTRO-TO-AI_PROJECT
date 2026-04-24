@@ -43,9 +43,10 @@ MAX_PLATE_CHARS     = 8         # Maximum — more than this is likely a false p
 MIN_UNIQUE_CHARS    = 3         # Reject readings whose characters are all the same (e.g. IIIIII)
 
 # ── Multi-frame Voting ─────────────────────────────────────────────────────
-VOTE_WINDOW         = 7         # Accumulate this many frames before deciding
-VOTE_MIN_HITS       = 3         # Plate string must appear ≥ this many times (was 2)
-VOTE_CONF_THRESHOLD = 0.55      # Aggregated confidence → ALLOWED (EasyOCR scores differ)
+VOTE_WINDOW         = 6         # Accumulate this many frames before deciding
+VOTE_MIN_HITS       = 2         # Plate string must appear ≥ this many times
+VOTE_CONF_THRESHOLD = 0.45      # Aggregated confidence → ALLOWED (EasyOCR scores differ)
+VOTE_FUZZY_DIST     = 2         # Max edit distance to group similar readings as one plate
 
 # ── Access Control ─────────────────────────────────────────────────────────
 UNCERTAIN_THRESHOLD = 0.40      # Below this → UNCERTAIN (not DENIED)

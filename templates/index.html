@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ALPR Gate</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a0a; overflow: hidden; font-family: 'Courier New', monospace; color: #fff; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; }
+
+    /* ── Header ── */
+    #header { text-align: center; }
+    #header h1 { font-size: 1.1em; letter-spacing: 0.2em; color: #aaa; font-weight: normal; }
+
+    /* ── Viewfinder box ── */
+    #viewfinder {
+      position: relative;
+      width: min(80vw, 420px);
+      aspect-ratio: 16/9;
+      background: #111;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    video {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+    }
+
+    #overlay {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+    }
+
+    /* Corner bracket decorations */
+    #viewfinder::before,
+    #viewfinder::after {
+      content: '';
+      position: absolute;
+      width: 24px; height: 24px;
+      z-index: 10;
+      pointer-events: none;
+    }
+    #viewfinder::before { top: 8px; left: 8px; border-top: 3px solid #00c853; border-left: 3px solid #00c853; }
+    #viewfinder::after  { bottom: 8px; right: 8px; border-bottom: 3px solid #00c853; border-right: 3px solid #00c853; }
+
+    /* Extra corners via inner spans */
+    .corner { position: absolute; width: 24px; height: 24px; z-index: 10; pointer-events: none; }
+    .corner.tr { top: 8px; right: 8px; border-top: 3px solid #00c853; border-right: 3px solid #00c853; }
+    .corner.bl { bottom: 8px; left: 8px; border-bottom: 3px solid #00c853; border-left: 3px solid #00c853; }
+
+    /* Scanning sweep line */
+    #scan-line {
+      position: absolute;
+      left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(to right, transparent, #00c853, transparent);
+      animation: sweep 2s linear infinite;
+      z-index: 9;
+    }
+    @keyframes sweep {
+      0%   { top: 10%; opacity: 1; }
+      90%  { top: 90%; opacity: 1; }
+      100% { top: 90%; opacity: 0; }
+    }
+
+    /* Camera permission prompt */
+    #cam-prompt {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: #111;
+      gap: 12px; z-index: 20;
+    }
+    #cam-prompt p  { color: #aaa; font-size: 0.85em; text-align: center; padding: 0 16px; }
+    #start-btn {
+      padding: 10px 24px; background: #00c853; color: #000;
+      border: none; border-radius: 8px; font-size: 1em;
+      font-weight: bold; cursor: pointer; letter-spacing: 0.05em;
+    }
+
+    /* ── Status bar below viewfinder ── */
+    #statusbar {
+      width: min(80vw, 420px);
+      background: #161616;
+      border: 1px solid #222;
+      border-radius: 10px;
+      padding: 14px 18px;
+      min-height: 80px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 6px;
+    }
+
+    #plate-text   { font-size: 2em; font-weight: bold; letter-spacing: 0.15em; }
+    #decision-text { font-size: 0.95em; min-height: 1.3em; }
+
+    #btn-row {
+      display: none;
+      gap: 16px; margin-top: 6px;
+    }
+    .btn {
+      padding: 10px 28px; font-size: 1em; font-weight: bold;
+      border: none; border-radius: 8px; cursor: pointer;
+      letter-spacing: 0.05em;
+    }
+    #btn-yes { background: #00c853; color: #000; }
+    #btn-no  { background: #d50000; color: #fff; }
+
+    /* ── Connection dot ── */
+    #conn {
+      position: fixed; top: 12px; right: 14px;
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #555;
+    }
+    #conn.on  { background: #00c853; }
+    #conn.off { background: #d50000; }
+  </style>
+</head>
+<body>
+
+  <div id="header"><h1>ALPR · VEHICLE ACCESS CONTROL</h1></div>
+
+  <div id="viewfinder">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
+    <span class="corner tr"></span>
+    <span class="corner bl"></span>
+    <div id="scan-line"></div>
+
+    <div id="cam-prompt">
+      <p>Point camera at a license plate</p>
+      <button id="start-btn">Enable Camera</button>
+      <p id="cam-error" style="color:#ef5350;display:none;"></p>
+    </div>
+  </div>
+
+  <div id="statusbar">
+    <div id="plate-text">—</div>
+    <div id="decision-text" style="color:#555;">Waiting for detection…</div>
+    <div id="btn-row">
+      <button class="btn" id="btn-yes">✓ Register</button>
+      <button class="btn" id="btn-no">✗ Deny</button>
+    </div>
+  </div>
+
+  <div id="conn"></div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+  const video    = document.getElementById('video');
+  const overlay  = document.getElementById('overlay');
+  const ctx      = overlay.getContext('2d');
+  const plateEl  = document.getElementById('plate-text');
+  const decEl    = document.getElementById('decision-text');
+  const btnRow   = document.getElementById('btn-row');
+  const btnYes   = document.getElementById('btn-yes');
+  const btnNo    = document.getElementById('btn-no');
+  const prompt   = document.getElementById('cam-prompt');
+  const startBtn = document.getElementById('start-btn');
+  const camErr   = document.getElementById('cam-error');
+  const connDot  = document.getElementById('conn');
+  const scanLine = document.getElementById('scan-line');
+
+  let pendingPlate = null;
+  let pendingConf  = 0;
+  let sending      = false;
+
+  // ── Socket ────────────────────────────────────────────────────────────────
+  const socket = io({ transports: ['websocket'] });
+  socket.on('connect',    () => connDot.className = 'on');
+  socket.on('disconnect', () => connDot.className = 'off');
+
+  // ── Camera ────────────────────────────────────────────────────────────────
+  startBtn.addEventListener('click', startCamera);
+
+  // Auto-start on phones (gesture not required)
+  startCamera();
+
+  function startCamera() {
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }
+    }).then(stream => {
+      video.srcObject = stream;
+      prompt.style.display = 'none';
+    }).catch(err => {
+      camErr.textContent   = err.message;
+      camErr.style.display = 'block';
+    });
+  }
+
+  video.addEventListener('loadedmetadata', () => {
+    overlay.width  = video.videoWidth;
+    overlay.height = video.videoHeight;
+  });
+
+  // ── Send frames at ~5 fps ─────────────────────────────────────────────────
+  const sendCanvas = document.createElement('canvas');
+  setInterval(() => {
+    if (sending || video.readyState < 2 || !video.videoWidth) return;
+    sending = true;
+    sendCanvas.width  = video.videoWidth;
+    sendCanvas.height = video.videoHeight;
+    sendCanvas.getContext('2d').drawImage(video, 0, 0);
+    socket.emit('frame', { image: sendCanvas.toDataURL('image/jpeg', 0.75) });
+  }, 200);
+
+  // ── Results ───────────────────────────────────────────────────────────────
+  socket.on('result', data => {
+    sending = false;
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+    if (data.status === 'scanning') {
+      scanLine.style.animationPlayState = 'running';
+      return;
+    }
+
+    // Draw bbox
+    if (data.bbox) {
+      const [x1, y1, x2, y2] = data.bbox;
+      const col = decColour(data.decision);
+      ctx.save();
+      ctx.strokeStyle = col;
+      ctx.lineWidth   = Math.max(2, overlay.width / 200);
+      ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+      if (data.plate) {
+        const fs = Math.max(14, overlay.width / 40);
+        ctx.font = `bold ${fs}px monospace`;
+        const tw = ctx.measureText(data.plate).width + 8;
+        ctx.fillStyle = col;
+        ctx.fillRect(x1, y1 - fs - 8, tw, fs + 8);
+        ctx.fillStyle = '#000';
+        ctx.fillText(data.plate, x1 + 4, y1 - 3);
+      }
+      ctx.restore();
+    }
+
+    if (data.voted_plate) {
+      plateEl.textContent = data.voted_plate;
+      const dec = data.decision || '';
+
+      if (dec === 'DENIED' && !pendingPlate) {
+        pendingPlate         = data.voted_plate;
+        pendingConf          = data.voted_conf;
+        setStatus('Unrecognized — register?', '#ffa726');
+        btnRow.style.display = 'flex';
+      } else if (dec === 'ALLOWED') {
+        setStatus('ALLOWED ✓', '#00c853');
+        autoReset(4000);
+      } else if (dec === 'UNCERTAIN') {
+        setStatus('UNCERTAIN', '#ffa726');
+        autoReset(3000);
+      } else if (dec === 'DENIED') {
+        setStatus('DENIED ✗', '#ef5350');
+        autoReset(3000);
+      }
+    } else if (data.plate) {
+      plateEl.textContent = data.plate;
+    }
+  });
+
+  socket.on('registered', () => {
+    pendingPlate         = null;
+    btnRow.style.display = 'none';
+    setStatus('REGISTERED ✓', '#00c853');
+    autoReset(3000);
+  });
+
+  btnYes.addEventListener('click', () => {
+    if (!pendingPlate) return;
+    socket.emit('register', { plate: pendingPlate, conf: pendingConf });
+    btnRow.style.display = 'none';
+  });
+
+  btnNo.addEventListener('click', () => {
+    pendingPlate         = null;
+    btnRow.style.display = 'none';
+    setStatus('DENIED ✗', '#ef5350');
+    autoReset(3000);
+  });
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  let resetTimer = null;
+  function setStatus(text, colour) {
+    decEl.textContent = text;
+    decEl.style.color = colour;
+  }
+  function autoReset(ms) {
+    clearTimeout(resetTimer);
+    resetTimer = setTimeout(() => {
+      plateEl.textContent = '—';
+      setStatus('Waiting for detection…', '#555');
+    }, ms);
+  }
+  function decColour(dec) {
+    if (dec === 'ALLOWED')   return '#00c853';
+    if (dec === 'DENIED')    return '#ef5350';
+    if (dec === 'UNCERTAIN') return '#ffa726';
+    return '#fff';
+  }
+</script>
+</body>
+</html>

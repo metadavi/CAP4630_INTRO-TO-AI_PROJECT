@@ -67,7 +67,7 @@ import config
 
 # ── Constants ──────────────────────────────────────────────────────────────
 
-RAW_PLATE_DIR   = "data/datasets/plate_detection"
+RAW_PLATE_DIR   = "data/train"
 OUT_DETECTOR    = "data/datasets/detector"
 RAW_CHARS_DIR   = "data/datasets/chars"
 OUT_CHARS       = "data/datasets/chars_processed"

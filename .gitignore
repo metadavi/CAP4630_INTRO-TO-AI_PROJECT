@@ -84,11 +84,22 @@ cython_debug/
 .DS_Store
 
 # ── Project-specific ─────────────────────────────────────────────────────────
-# Training datasets (1 GB+ of images — download separately for training)
+# Training datasets (download separately — too large for git)
 data/datasets/
+data/train/
+data/valid/
+data/test/
+data/LP-characters/
+data/README.dataset.txt
+data/README.roboflow.txt
+data/count.txt
+data/data.yaml
 
 # Runtime log files
 data/logs/*.csv
+
+# Claude Code internals
+.claude/
 
 # ── Secrets / credentials (NEVER commit these) ────────────────────────────────
 .env.*

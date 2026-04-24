@@ -78,9 +78,9 @@ def get_loaders(batch_size: int, train_split: float):
     val_ds.dataset = datasets.ImageFolder(DATA_DIR, transform=val_tf)
 
     train_loader = DataLoader(train_ds, batch_size=batch_size,
-                              shuffle=True,  num_workers=2, pin_memory=True)
+                              shuffle=True,  num_workers=2, pin_memory=torch.cuda.is_available())
     val_loader   = DataLoader(val_ds,   batch_size=batch_size,
-                              shuffle=False, num_workers=2, pin_memory=True)
+                              shuffle=False, num_workers=2, pin_memory=torch.cuda.is_available())
 
     print(f"[train_classifier] {n_train} train  |  {n_val} val")
     return train_loader, val_loader, loaded_classes
@@ -95,7 +95,12 @@ def train(epochs: int, lr: float, batch_size: int) -> None:
         sys.exit(1)
 
     os.makedirs(config.MODEL_DIR, exist_ok=True)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
     print(f"[train_classifier] Device: {device}")
 
     train_loader, val_loader, loaded_classes = get_loaders(batch_size, config.TRAIN_SPLIT)

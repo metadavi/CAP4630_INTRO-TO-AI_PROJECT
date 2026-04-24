@@ -25,6 +25,7 @@ except ImportError:
 from src.detector        import PlateDetector
 from src.segmenter       import CharSegmenter
 from src.char_classifier import CharClassifier
+from src.plate_reader    import PlateReader
 import config
 
 _ALNUM    = re.compile(r'[^A-Z0-9]')
@@ -50,17 +51,33 @@ class OCRReader:
                  classifier: CharClassifier = None):
         self.detector = detector or PlateDetector()
 
-        if _EASYOCR_AVAILABLE:
+        crnn_weights = os.path.join(config.MODEL_DIR, "plate_crnn.pth")
+
+        if os.path.exists(crnn_weights):
+            # ── Primary: custom trained CRNN (best option) ────────────────
+            print("[OCR] Loading custom CRNN plate reader…")
+            self._plate_reader  = PlateReader(crnn_weights)
+            self._use_crnn      = True
+            self._use_easyocr   = False
+            print("[OCR] CRNN ready.")
+
+        elif _EASYOCR_AVAILABLE:
+            # ── Fallback 1: EasyOCR (while CRNN is not yet trained) ───────
+            self._use_crnn = False
             kwargs = dict(gpu=False, verbose=False)
             if _MODEL_DIR:
                 kwargs["model_storage_directory"] = _MODEL_DIR
-            print("[OCR] Initialising EasyOCR…")
+            print("[OCR] CRNN weights not found — using EasyOCR fallback.")
+            print("      Train CRNN: python train/train_crnn.py")
             self._reader       = _easyocr.Reader(['en'], **kwargs)
             self._use_easyocr  = True
             print("[OCR] EasyOCR ready.")
+
         else:
-            print("[OCR] EasyOCR not installed — falling back to CharCNN. "
-                  "Run: pip install easyocr")
+            # ── Fallback 2: custom CharCNN segmentation pipeline ──────────
+            print("[OCR] No CRNN weights and EasyOCR not installed.")
+            print("      Train CRNN: python train/train_crnn.py")
+            self._use_crnn     = False
             self._use_easyocr  = False
             self.segmenter     = segmenter  or CharSegmenter()
             self.classifier    = classifier or CharClassifier()
@@ -77,6 +94,8 @@ class OCRReader:
         if plate_crop_bgr is None or plate_crop_bgr.size == 0:
             return "", 0.0
 
+        if self._use_crnn:
+            return self._plate_reader.read(plate_crop_bgr)
         if self._use_easyocr:
             return self._read_easyocr(plate_crop_bgr)
         return self._read_custom(plate_crop_bgr)

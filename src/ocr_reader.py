@@ -84,13 +84,12 @@ class OCRReader:
     # ── EasyOCR path ────────────────────────────────────────────────────────
 
     def _read_easyocr(self, crop: np.ndarray) -> tuple[str, float]:
-        # Strip the top 18% (state name / website) and bottom 18% (tagline /
-        # dealer frame) — the actual plate characters sit in the middle band.
+        # Strip the top 10% (state name / website) and bottom 10% (tagline /
+        # dealer frame) — conservative margin so we don't cut into characters.
         h = crop.shape[0]
-        margin = int(h * 0.18)
-        crop = crop[margin: h - margin, :]
-        if crop.shape[0] < 10:          # guard against tiny crops
-            return "", 0.0
+        margin = int(h * 0.10)
+        if h - 2 * margin >= 10:
+            crop = crop[margin: h - margin, :]
 
         crop = self._preprocess_for_ocr(crop)
 
@@ -99,6 +98,10 @@ class OCRReader:
             detail=1,
             paragraph=False,
             allowlist=_ALLOWLIST,
+            text_threshold=0.5,     # lower = picks up faint/coloured text (FL green plates)
+            low_text=0.3,           # more sensitive to low-contrast character edges
+            contrast_ths=0.2,       # apply contrast boost if below this level
+            adjust_contrast=0.8,    # target contrast after boost
         )
         if not results:
             return "", 0.0
@@ -117,18 +120,36 @@ class OCRReader:
 
     @staticmethod
     def _preprocess_for_ocr(crop: np.ndarray) -> np.ndarray:
-        """Upscale + CLAHE contrast enhancement to handle screen glare."""
+        """
+        Upscale + contrast enhancement optimised for licence plates.
+
+        Handles both standard dark-on-light plates AND Florida-style
+        green/teal characters on white backgrounds by boosting saturation
+        before the CLAHE step so coloured text becomes darker than the
+        white background in the luminance channel.
+        """
         h, w = crop.shape[:2]
+
+        # Upscale so shortest edge >= 64 px
         if min(h, w) < 64:
             scale = 64 / min(h, w)
             crop  = cv2.resize(crop, (int(w * scale), int(h * scale)),
                                interpolation=cv2.INTER_CUBIC)
         h, w = crop.shape[:2]
+
+        # Upscale width to at least 200 px for character resolution
         if w < 200:
             scale = 200 / w
             crop  = cv2.resize(crop, (int(w * scale), int(h * scale)),
                                interpolation=cv2.INTER_CUBIC)
 
+        # Boost saturation so coloured (green/teal) text separates from
+        # the white background in the luminance channel
+        hsv        = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV).astype(np.float32)
+        hsv[:,:,1] = np.clip(hsv[:,:,1] * 1.8, 0, 255)  # saturation ×1.8
+        crop       = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
+
+        # CLAHE on L channel to normalise brightness / reduce glare
         lab      = cv2.cvtColor(crop, cv2.COLOR_BGR2LAB)
         l, a, b  = cv2.split(lab)
         clahe    = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(4, 4))

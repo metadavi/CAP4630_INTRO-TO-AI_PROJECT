@@ -150,13 +150,32 @@ def _process_frame(sid: str, data: dict) -> None:
         _cooldown[sid] = time.time() + config.VOTE_COOLDOWN_SECS
 
         result.update({
-            "voted_plate": voted_plate,
-            "voted_conf":  round(voted_conf, 3),
-            "decision":    decision.value,
-            "owner":       info.get("owner", ""),
+            "voted_plate":       voted_plate,
+            "voted_conf":        round(voted_conf, 3),
+            "decision":          decision.value,
+            "owner":             info.get("owner", ""),
+            "previously_denied": info.get("previously_denied", False),
         })
 
     emit("result", result)
+
+
+@socketio.on("deny")
+def on_deny(data):
+    plate = data.get("plate", "").strip().upper()
+    conf  = data.get("conf", 0.0)
+    if not plate:
+        return
+
+    controller.deny_plate(plate)
+    logger.log(
+        plate      = plate,
+        confidence = conf,
+        decision   = "DENIED",
+        owner      = "",
+        notes      = "Denied at gate",
+    )
+    emit("denied", {"plate": plate})
 
 
 @socketio.on("register")

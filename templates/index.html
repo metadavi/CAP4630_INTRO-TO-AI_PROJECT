@@ -240,7 +240,10 @@
       plateEl.textContent = data.voted_plate;
       const dec = data.decision || '';
 
-      if (dec === 'DENIED' && !pendingPlate) {
+      if (dec === 'DENIED' && data.previously_denied) {
+        setStatus('DENIED ✗', '#ef5350');
+        autoReset(4000);
+      } else if (dec === 'DENIED' && !pendingPlate) {
         pendingPlate         = data.voted_plate;
         pendingConf          = data.voted_conf;
         setStatus('Unrecognized — register?', '#ffa726');
@@ -274,6 +277,9 @@
   });
 
   btnNo.addEventListener('click', () => {
+    if (pendingPlate) {
+      socket.emit('deny', { plate: pendingPlate, conf: pendingConf });
+    }
     pendingPlate         = null;
     btnRow.style.display = 'none';
     setStatus('DENIED ✗', '#ef5350');

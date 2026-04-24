@@ -39,10 +39,11 @@ class AccessController:
     """
 
     def __init__(self, whitelist_path: str = config.WHITELIST_PATH):
-        self.whitelist_path = whitelist_path
+        self.whitelist_path  = whitelist_path
         self._mtime: float | None = None
         self._plates: set[str]    = set()
         self._df: pd.DataFrame    = pd.DataFrame()
+        self._denied: set[str]    = set()   # explicitly denied plates (in-memory)
         self._load()
 
     # ── Public API ─────────────────────────────────────────────────────────
@@ -72,6 +73,11 @@ class AccessController:
         # Too uncertain to decide
         if confidence < config.UNCERTAIN_THRESHOLD:
             return Decision.UNCERTAIN, info
+
+        # Check denylist first — explicitly denied plates skip the register prompt
+        if plate in self._denied:
+            info["previously_denied"] = True
+            return Decision.DENIED, info
 
         # Look up in whitelist
         if plate in self._plates:
@@ -116,6 +122,10 @@ class AccessController:
         self._df     = pd.concat([self._df, new_row], ignore_index=True)
         self._plates.add(plate)
         self._save()
+
+    def deny_plate(self, plate: str) -> None:
+        """Remember a plate as explicitly denied (persists for this session)."""
+        self._denied.add(plate.upper().strip())
 
     def remove_plate(self, plate: str) -> bool:
         """Remove a plate from the whitelist. Returns True if it existed."""

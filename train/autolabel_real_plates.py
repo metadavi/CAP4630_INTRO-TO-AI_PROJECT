@@ -1,16 +1,17 @@
 """
 Auto-Label Real Plate Crops
 ============================
-Uses EasyOCR to label the 7,057 real plate images in data/train.
+Uses the trained CRNN (PlateReader) to label the real plate images in
+data/train — replacing the old EasyOCR pass with a faster, more accurate
+domain-specific model.
 
 Steps:
   1. Read each YOLO label file to get the plate bounding box
   2. Crop the plate from the image
-  3. Run EasyOCR to get the text + confidence
+  3. Run PlateReader (CRNN+CTC) to get the text + confidence
   4. Keep only high-confidence readings (>= MIN_CONF)
-  5. Save crops + labels to data/datasets/crnn_plates/
-
-This adds real-world plate appearance to the synthetic training set.
+  5. Save new crops + labels to data/datasets/crnn_plates/
+     (existing entries are skipped — no duplicates)
 
 Usage:
     python train/autolabel_real_plates.py
@@ -28,12 +29,13 @@ from tqdm import tqdm
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import config
+from src.plate_reader import PlateReader
 
 # ── Constants ──────────────────────────────────────────────────────────────
 RAW_IMG_DIR   = "data/train/images"
 RAW_LBL_DIR   = "data/train/labels"
 OUT_DIR       = "data/datasets/crnn_plates"
-MIN_CONF      = 0.65     # discard auto-labels below this confidence
+MIN_CONF      = 0.60     # CRNN mean-max-prob confidence threshold
 PAD           = 0.05     # 5% padding around the bbox crop
 
 
@@ -68,18 +70,13 @@ def _parse_yolo(label_path: str) -> list[tuple]:
 
 
 def run(min_conf: float) -> None:
-    try:
-        import easyocr
-    except ImportError:
-        print("ERROR: easyocr not installed. Run: pip install easyocr")
+    weights = os.path.join(config.MODEL_DIR, "plate_crnn.pth")
+    if not os.path.exists(weights):
+        print("ERROR: CRNN weights not found. Run: python train/train_crnn.py first.")
         sys.exit(1)
 
-    import re
-    alnum = re.compile(r'[^A-Z0-9]')
-    allowlist = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-
-    print("[autolabel] Loading EasyOCR…")
-    reader = easyocr.Reader(['en'], gpu=False, verbose=False)
+    print("[autolabel] Loading CRNN PlateReader…")
+    reader = PlateReader(weights)
     print("[autolabel] Ready.")
 
     img_dir = os.path.join(OUT_DIR, "images")
@@ -92,21 +89,21 @@ def run(min_conf: float) -> None:
     kept    = 0
     skipped = 0
 
-    # Load existing labels.csv so we can append
+    # Load existing labels.csv so we can append without duplicates
     csv_path = os.path.join(OUT_DIR, "labels.csv")
     existing_stems = set()
     if os.path.exists(csv_path):
         with open(csv_path) as f:
             for row in csv.DictReader(f):
                 existing_stems.add(row["stem"])
-        print(f"[autolabel] Found {len(existing_stems)} existing entries — appending")
+        print(f"[autolabel] {len(existing_stems)} existing entries — skipping duplicates")
 
     for img_name in tqdm(img_files, desc="Auto-labelling plates"):
         stem     = os.path.splitext(img_name)[0]
         img_path = os.path.join(RAW_IMG_DIR, img_name)
         lbl_path = os.path.join(RAW_LBL_DIR, stem + ".txt")
 
-        img  = cv2.imread(img_path)
+        img = cv2.imread(img_path)
         if img is None:
             continue
 
@@ -115,39 +112,25 @@ def run(min_conf: float) -> None:
             continue
 
         for j, box in enumerate(boxes):
+            entry_stem = f"real_{stem}_{j}"
+            if entry_stem in existing_stems:
+                continue
+
             crop = _crop_plate(img, box)
             if crop is None:
                 continue
 
-            # Run EasyOCR on the crop
-            results = reader.readtext(
-                crop, detail=1, paragraph=False,
-                allowlist=allowlist,
-                text_threshold=0.5, low_text=0.3,
-            )
+            # Run CRNN on the crop
+            text, conf = reader.read(crop)
 
-            best_text = ""
-            best_conf = 0.0
-            for (_, text, conf) in results:
-                cleaned = alnum.sub('', text.upper())
-                if (config.MIN_PLATE_CHARS <= len(cleaned) <= config.MAX_PLATE_CHARS
-                        and len(set(cleaned)) >= config.MIN_UNIQUE_CHARS
-                        and conf > best_conf):
-                    best_text = cleaned
-                    best_conf = conf
-
-            if not best_text or best_conf < min_conf:
+            if not text or conf < min_conf:
                 skipped += 1
-                continue
-
-            entry_stem = f"real_{stem}_{j}"
-            if entry_stem in existing_stems:
                 continue
 
             # Save the crop
             out_name = entry_stem + ".png"
             cv2.imwrite(os.path.join(img_dir, out_name), crop)
-            rows.append({"stem": entry_stem, "text": best_text})
+            rows.append({"stem": entry_stem, "text": text})
             existing_stems.add(entry_stem)
             kept += 1
 
@@ -159,14 +142,15 @@ def run(min_conf: float) -> None:
             writer.writeheader()
         writer.writerows(rows)
 
-    print(f"\n[autolabel] Done — {kept} crops saved, {skipped} skipped (low confidence)")
+    print(f"\n[autolabel] Done — {kept} new crops saved, {skipped} skipped (low conf / no text)")
     print(f"  Labels appended to {csv_path}")
+    print(f"  Now retrain: python train/train_crnn.py")
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--conf", type=float, default=MIN_CONF,
-                        help="Minimum EasyOCR confidence to keep a label")
+                        help="Minimum CRNN confidence to keep a label (default: 0.60)")
     args = parser.parse_args()
     run(args.conf)
 

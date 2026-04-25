@@ -208,14 +208,12 @@ def train(epochs: int, lr: float, batch_size: int) -> None:
 
         for images, labels, input_lens, label_lens in train_loader:
             images     = images.to(device)
-            labels     = labels.to(device)
-            input_lens = input_lens.to(device)
-            label_lens = label_lens.to(device)
 
             optimizer.zero_grad()
             log_probs = model(images)                      # (T,B,C)
-            loss = criterion(log_probs, labels,
-                             input_lens, label_lens)
+            # CTCLoss not implemented on MPS — compute on CPU, grads flow back
+            loss = criterion(log_probs.cpu(),
+                             labels, input_lens, label_lens)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
             optimizer.step()
@@ -231,14 +229,12 @@ def train(epochs: int, lr: float, batch_size: int) -> None:
 
         with torch.no_grad():
             for images, labels, input_lens, label_lens in val_loader:
-                images     = images.to(device)
-                labels_dev = labels.to(device)
-                input_lens = input_lens.to(device)
-                label_lens = label_lens.to(device)
+                images = images.to(device)
 
                 log_probs = model(images)
-                loss = criterion(log_probs, labels_dev,
-                                 input_lens, label_lens)
+                # CTCLoss on CPU (not supported on MPS)
+                loss = criterion(log_probs.cpu(),
+                                 labels, input_lens, label_lens)
                 val_loss += loss.item() * images.size(0)
 
                 # Decode each sample in the batch
@@ -253,7 +249,7 @@ def train(epochs: int, lr: float, batch_size: int) -> None:
                     )
                     all_preds.append(pred)
                     all_targets.append(target)
-                    offset += tlen
+                    offset += int(tlen)
 
         val_loss  /= n_val
         c_acc = char_accuracy(all_preds, all_targets)

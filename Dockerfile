@@ -31,16 +31,8 @@ COPY --from=builder /usr/local/lib/python3.11/site-packages \
                     /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy application code and trained models
+# Copy application code and trained models (includes models/plate_crnn.pth)
 COPY . .
-
-# Pre-download EasyOCR English models into the image so there's no
-# network call on first request (bakes ~100 MB into the image)
-RUN python -c "\
-import easyocr; \
-easyocr.Reader(['en'], gpu=False, \
-               model_storage_directory='/app/easyocr_models', \
-               verbose=False)"
 
 # Cloud Run injects PORT; default to 8080 for local Docker testing
 ENV PORT=8080

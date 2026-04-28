@@ -1,51 +1,96 @@
-# AI Vehicle Access Control — ALPR
+# AI Vehicle Access Control — ALPR 🚘
 **CAP4630 · Introduction to Artificial Intelligence**
 
-An AI-powered gate-keeping system that reads Florida license plates in real time via a phone camera, decides whether to grant or deny access, and lets an operator register new plates on the spot.
+## Overview
 
----
+This project develops an AI Vehicle Access Control system for automated license plate recognition and secure site authentication. Using a hybrid pipeline of CNN-based detection and CRNN-based sequence recognition, the model achieves **88.04% character accuracy** and **84.82% exact-match accuracy**, providing a reliable and auditable solution for real-world gatekeeper management.
 
-## How It Works
+[Demo]()
 
-1. Phone camera streams video to the server over WebSocket
-2. A classical CV + CNN detector finds the plate bounding box
-3. The plate crop is preprocessed (CLAHE, orange graphic masking) and fed to a custom **CRNN + CTC** model
-4. Readings across multiple frames are fuzzy-clustered (Levenshtein) into a confident vote
-5. The voted plate is checked against a whitelist CSV → **ALLOWED / DENIED / UNCERTAIN**
-6. The operator can register or deny unknown plates live from the UI
+## Project Objectives
 
----
+The primary goal of this project is to:
 
-## Tech Stack
+- Replace manual or RFID-based gate systems with an automated, reliable license plate recognition pipeline.
 
-| Component | Technology |
-|---|---|
-| AI Models | PyTorch (custom CNNs + CRNN + CTC) |
-| Computer Vision | OpenCV + CLAHE contrast normalization |
-| Web Server | Flask + Flask-SocketIO |
-| Real-time Comms | WebSocket (Socket.IO) |
-| Frontend | HTML5 + JavaScript (getUserMedia API) |
-| Database | CSV (whitelist) + CSV (event logs) |
-| Training Acceleration | Apple MPS (Metal) — M1/M2/M3 Macs |
-| Primary OCR | Custom CRNN + CTC (trained from scratch) |
-| OCR Fallback | EasyOCR → CharCNN segmentation pipeline |
-| Multi-frame Voting | Levenshtein fuzzy clustering |
-| Deployment | Google Cloud Run |
-| Async Worker | Eventlet |
+- Utilize a robust CRNN + CTC model to accurately read license plates under challenging conditions like motion blur and low light.
 
----
+- Apply fuzzy clustering (Levenshtein) across multiple frames to eliminate noise and ensure high-confidence identification.
+
+- Provide a browser-based dashboard for real-time monitoring and operator control (manual registration/denial).
+
+- Automatically log all entry attempts to provide a verifiable history of site traffic.
+
+
+## System Pipeline
+
+1. **Capture**: Streams live video frames via WebSocket from the mobile camera to the Flask server.
+
+2. **Localization (PlateCNN)**: A 5-layer binary CNN identifies the license plate region of interest (ROI) and crops the frame.
+
+3. **Recognition (CRNN + CTC)**: The plate crop is normalized (CLAHE) and fed into a Convolutional Recurrent Neural Network to perform sequence recognition without needing manual character segmentation.
+
+4. **Validation (Multi-Frame Voter)**: Readings are collected in a sliding window of 6 frames and aggregated using Levenshtein fuzzy clustering to eliminate transient "glitch" reads caused by motion blur or poor lighting.
+
+5. **Authentication**: The high-confidence voted plate is checked against the authorized whitelist.csv.
+
+6. **Operator Interaction**: The web UI displays a real-time ALLOWED/DENIED status. For unrecognized plates, the operator is prompted to either register the vehicle (adding it to the database) or deny entry.
+
+7. **Logging**: Every scan, including the timestamp and the final access decision, is recorded to an auditable CSV log file.
+
+
+## Model Architecture
+
+The system utilizes a modular, two-stage deep learning pipeline to transform raw video frames into validated alphanumeric strings.
+
+1. Plate Detector (Binary CNN) -
+The first stage is a custom PlateCNN responsible for region-of-interest (ROI) localization.
+
+- **Input**: 64x128 RGB image patches sampled from the video stream.
+
+- **Architecture**: A 5-layer Convolutional Neural Network consisting of three convolutional layers with ReLU activation and Max-Pooling, followed by two fully connected layers.
+
+- **Function**: Outputs a binary classification (Plate vs. Background) to trigger the OCR pipeline only when a valid vehicle plate is localized.
+
+2. OCR Engine (CRNN + CTC) -
+The core of the recognition system is a Convolutional Recurrent Neural Network (CRNN), which treats license plate reading as a sequence labeling task rather than individual character classification.
+
+- **CNN Backbone**: Extracts deep spatial features from 32x128 grayscale plate crops.
+
+- **Sequence Modeling**: A Bidirectional LSTM (Long Short-Term Memory) layer processes the CNN feature maps to capture the spatial dependencies between characters.
+
+- **Transcription Layer**: Utilizes Connectionist Temporal Classification (CTC) Loss, allowing the model to predict character sequences of varying lengths (5–7 characters) without requiring pre-segmented character labels.
+
 
 ## Dataset Sources
 
 | Dataset | Source | Used For |
 |---|---|---|
 | Car Plate Detection | [Kaggle — andrewmvd](https://www.kaggle.com/datasets/andrewmvd/car-plate-detection) | Plate detector training |
-| LP Character Recognition | [Kaggle — prerak23](https://www.kaggle.com/datasets/prerak23/license-plate-character-recognition) | Char classifier training |
+| LP Character Recognition | [Kaggle — francescopettini](https://www.kaggle.com/datasets/francescopettini/license-plate-characters-detection-ocr/data) | Char classifier training |
 | License Plate Recognition v11 | [Roboflow Universe](https://universe.roboflow.com/roboflow-universe-projects/license-plate-recognition-rxg4e) — CC BY 4.0 | Plate detector training |
 | Synthetic FL plates (~15,000) | Self-generated (`train/generate_florida_plates.py`) | CRNN training |
 | Self-collected real photos (~502) | Neighborhood + parking garage (manually labeled) | CRNN training |
 
----
+
+## Training
+
+> Only needed if you want to retrain from scratch or add more data.
+
+### CRNN (primary OCR model)
+```bash
+python train/train_crnn.py --epochs 50 --lr 0.001
+```
+
+### Plate Detector
+```bash
+python train/train_detector.py
+```
+
+### Add real photos to the training set
+```bash
+python train/ingest_photos.py --photos /path/to/your/photos
+```
 
 ## Model Evaluation (Validation Set — 3,102 samples)
 
@@ -53,23 +98,47 @@ An AI-powered gate-keeping system that reads Florida license plates in real time
 |---|---|
 | Character Accuracy | 88.04% |
 | Exact-match Accuracy | 84.82% |
-| Macro Precision | 86.39% |
-| Macro Recall | 83.53% |
-| Macro F1-Score | 84.88% |
+| Average Precision | 86.39% |
+| Average Recall | 83.53% |
+| Average F1-Score | 84.88% |
+
+### Evaluation Chart
 
 ![Evaluation Charts](models/eval_charts.png)
 
----
+*The gap between Character Accuracy (88.04%) and Exact Match Accuracy (84.82%) indicates that most prediction errors come from single-character misclassifications, rather than complete plate failures*
+
+
+## Challenges Faced
+
+#### Florida-Specific Recognition
+
+During the evaluation, we observed that the model initially struggled with Florida-specific license plates due to a lack of representative data in public datasets.
+ - To address this, we collected 300 custom photos from local parking environments and generated 15,000 synthetic Florida plates to teach the model the specific geometry and colors of regional tags.
+ - While this approach significantly increased the success rate from the baseline, the "orange" graphic and variable lighting in real-world environments remain a source of character-level confusion. Although the exact-match accuracy remains under 90%, the model demonstrates a successful proof-of-concept for domain-adapted access control.
+
+## Technologies Used
+
+- **Deep Learning Framework**: PyTorch (custom CNNs + CRNN + CTC) 
+- **Computer Vision**: OpenCV + CLAHE contrast normalization 
+- **Web Server**: Flask + Flask-SocketIO 
+- **Real-time Comms**: WebSocket (Socket.IO) 
+- **Frontend**: HTML5 + JavaScript (getUserMedia API) 
+- **Database**: CSV (whitelist) + CSV (event logs) 
+- **Training Acceleration**: Apple MPS (Metal) — M1/M2/M3 Macs 
+- **Primary OCR**: Custom CRNN + CTC (trained from scratch) 
+- **Multi-frame Voting**: Levenshtein fuzzy clustering 
+- **Deployment**: Google Cloud Run 
+- **Async Worker**: Eventlet 
+
 
 ## Prerequisites
 
 - **Python 3.10 or 3.11** (3.12+ not yet supported by all dependencies)
 - **pip** (comes with Python)
-- **Git**
 - A Mac with Apple Silicon **or** a machine with a CUDA GPU (CPU works but training will be slow)
 - A phone and computer on the **same Wi-Fi network** to use the live camera UI
 
----
 
 ## Installation
 
@@ -103,9 +172,10 @@ models/
 ```
 These are committed to the repo. If they are missing, retrain — see **Training** below.
 
----
 
-## Running the Server
+## Usage 
+
+### Running the Server
 
 ```bash
 python server.py
@@ -124,7 +194,20 @@ Open that URL on your phone (same Wi-Fi). Accept the self-signed certificate war
 | `--port` | `8080` | Port to listen on |
 | `--no-ssl` | off | Disable HTTPS (use if behind a reverse proxy) |
 
----
+
+## Configuration
+
+All parameters are in `config.py`. Key ones:
+
+| Parameter | Default | Description |
+|---|---|---|
+| `VOTE_WINDOW` | `6` | Frames to accumulate before deciding |
+| `VOTE_FUZZY_DIST` | `3` | Max Levenshtein distance to cluster reads |
+| `VOTE_COOLDOWN_SECS` | `6.0` | Pause after a decision before re-scanning |
+| `VOTE_CONF_THRESHOLD` | `0.45` | Confidence floor for ALLOWED decision |
+| `MIN_PLATE_CHARS` | `5` | Minimum characters for a valid plate |
+| `MAX_PLATE_CHARS` | `7` | Maximum characters for a valid plate |
+
 
 ## Project Structure
 
@@ -158,38 +241,17 @@ Open that URL on your phone (same Wi-Fi). Accept the self-signed certificate war
     └── index.html             # Phone camera UI
 ```
 
----
+## Future Improvements
 
-## Training
+- Deploy with Docker + GPU backend
+- Replace CSV logging with PostgreSQL
+- Expand Florida license plate dataset with more real-world samples
 
-> Only needed if you want to retrain from scratch or add more data.
+## License
 
-### CRNN (primary OCR model)
-```bash
-python train/train_crnn.py --epochs 50 --lr 0.001
-```
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-### Plate Detector
-```bash
-python train/train_detector.py
-```
-
-### Add real photos to the training set
-```bash
-python train/ingest_photos.py --photos /path/to/your/photos
-```
-
----
-
-## Configuration
-
-All parameters are in `config.py`. Key ones:
-
-| Parameter | Default | Description |
-|---|---|---|
-| `VOTE_WINDOW` | `6` | Frames to accumulate before deciding |
-| `VOTE_FUZZY_DIST` | `3` | Max Levenshtein distance to cluster reads |
-| `VOTE_COOLDOWN_SECS` | `6.0` | Pause after a decision before re-scanning |
-| `VOTE_CONF_THRESHOLD` | `0.45` | Confidence floor for ALLOWED decision |
-| `MIN_PLATE_CHARS` | `5` | Minimum characters for a valid plate |
-| `MAX_PLATE_CHARS` | `7` | Maximum characters for a valid plate |
+## References
+1. [Car License Plate Detection](https://www.kaggle.com/datasets/andrewmvd/car-plate-detection)
+2. [Character recognition](https://www.kaggle.com/datasets/francescopettini/license-plate-characters-detection-ocr/data)
+3. [License Plate Recognition v11](https://universe.roboflow.com/roboflow-universe-projects/license-plate-recognition-rxg4e)

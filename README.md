@@ -215,7 +215,7 @@ All parameters are in `config.py`. Key ones:
 ├── config.py                  # All tunable parameters
 ├── src/
 │   ├── detector.py            # Plate detector (CV + CNN)
-│   ├── ocr_reader.py          # OCR orchestrator (CRNN → EasyOCR → CharCNN)
+│   ├── ocr_reader.py          # OCR orchestrator (CRNN → CharCNN)
 │   ├── plate_reader.py        # CRNN model definition + inference
 │   ├── voter.py               # Multi-frame Levenshtein voter
 │   ├── access_control.py      # Whitelist + decision logic

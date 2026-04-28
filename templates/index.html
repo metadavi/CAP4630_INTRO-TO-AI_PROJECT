@@ -213,7 +213,18 @@
 
     if (data.status === 'scanning') {
       scanLine.style.animationPlayState = 'running';
+      // Do NOT clear buttons here — user may still be deciding.
+      // Buttons are cleared only when the user clicks Yes/No,
+      // or when a different plate is voted in (handled below).
       return;
+    }
+
+    // If a new voted_plate arrived that differs from the one pending buttons,
+    // clear the old pending state before processing the new decision.
+    if (data.voted_plate && pendingPlate && data.voted_plate !== pendingPlate) {
+      pendingPlate         = null;
+      pendingConf          = 0;
+      btnRow.style.display = 'none';
     }
 
     // Draw bbox

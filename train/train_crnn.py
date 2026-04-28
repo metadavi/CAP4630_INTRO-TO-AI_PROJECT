@@ -98,25 +98,73 @@ class PlateDataset(Dataset):
     def _augment(img: np.ndarray) -> np.ndarray:
         h, w = img.shape[:2]
 
-        # Random rotation ±6°
-        angle = random.uniform(-6, 6)
+        # Perspective warp — simulates angled/tilted shots (parking garage, street)
+        if random.random() < 0.5:
+            margin = 0.08
+            pts1 = np.float32([[0, 0], [w, 0], [0, h], [w, h]])
+            pts2 = np.float32([
+                [random.uniform(0, margin * w), random.uniform(0, margin * h)],
+                [w - random.uniform(0, margin * w), random.uniform(0, margin * h)],
+                [random.uniform(0, margin * w), h - random.uniform(0, margin * h)],
+                [w - random.uniform(0, margin * w), h - random.uniform(0, margin * h)],
+            ])
+            M   = cv2.getPerspectiveTransform(pts1, pts2)
+            img = cv2.warpPerspective(img, M, (w, h), borderMode=cv2.BORDER_REPLICATE)
+
+        # Rotation ±12° (increased from ±6° to cover parking garage angles)
+        angle = random.uniform(-12, 12)
         M     = cv2.getRotationMatrix2D((w / 2, h / 2), angle, 1.0)
         img   = cv2.warpAffine(img, M, (w, h), borderMode=cv2.BORDER_REPLICATE)
 
-        # Random blur
-        if random.random() < 0.3:
-            k   = random.choice([3, 5])
-            img = cv2.GaussianBlur(img, (k, k), 0)
+        # Horizontal shadow band — simulates overhangs, sun at low angle
+        if random.random() < 0.4:
+            y0  = random.randint(0, h // 2)
+            y1  = min(h, y0 + random.randint(h // 6, h // 3))
+            img = img.astype(np.float32)
+            img[y0:y1, :] *= random.uniform(0.3, 0.6)
+            img = np.clip(img, 0, 255).astype(np.uint8)
 
-        # Brightness / contrast jitter
-        alpha = random.uniform(0.8, 1.2)
-        beta  = random.randint(-20, 20)
+        # Florida orange-center graphic simulation — in grayscale the orange
+        # region reads as mid-gray (~160-200) and bleeds into character strokes
+        if random.random() < 0.5:
+            cx     = w // 2
+            blob_w = random.randint(w // 5, w // 3)
+            x0     = max(0, cx - blob_w // 2)
+            x1     = min(w, cx + blob_w // 2)
+            og     = random.randint(150, 200)   # orange → grayscale value
+            alpha  = random.uniform(0.2, 0.5)
+            img    = img.astype(np.float32)
+            img[:, x0:x1] = img[:, x0:x1] * (1 - alpha) + og * alpha
+            img    = np.clip(img, 0, 255).astype(np.uint8)
+
+        # Blur — Gaussian or horizontal motion blur (moving vehicle)
+        if random.random() < 0.4:
+            if random.random() < 0.5:
+                k   = random.choice([3, 5])
+                img = cv2.GaussianBlur(img, (k, k), 0)
+            else:
+                k      = random.choice([3, 5, 7])
+                kernel = np.zeros((k, k), np.float32)
+                kernel[k // 2, :] = 1.0 / k
+                img = cv2.filter2D(img, -1, kernel)
+
+        # Brightness / contrast jitter (more aggressive range)
+        alpha = random.uniform(0.7, 1.3)
+        beta  = random.randint(-30, 30)
         img   = np.clip(img.astype(np.float32) * alpha + beta,
                         0, 255).astype(np.uint8)
 
         # Gaussian noise
-        noise = np.random.normal(0, random.uniform(1, 8), img.shape).astype(np.int16)
+        noise = np.random.normal(0, random.uniform(1, 10), img.shape).astype(np.int16)
         img   = np.clip(img.astype(np.int16) + noise, 0, 255).astype(np.uint8)
+
+        # Salt-and-pepper noise — simulates dirty/wet plates
+        if random.random() < 0.2:
+            amount = random.uniform(0.01, 0.03)
+            n_sp   = int(img.size * amount)
+            for val in (255, 0):
+                coords = tuple(np.random.randint(0, s, n_sp) for s in img.shape)
+                img[coords] = val
 
         return img
 
@@ -330,7 +378,7 @@ def _plot_history(history):
 
 def main():
     parser = argparse.ArgumentParser(description="Train CRNN + CTC plate reader")
-    parser.add_argument("--epochs",     type=int,   default=40)
+    parser.add_argument("--epochs",     type=int,   default=50)
     parser.add_argument("--lr",         type=float, default=1e-3)
     parser.add_argument("--batch-size", type=int,   default=64)
     args = parser.parse_args()

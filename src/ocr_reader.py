@@ -95,10 +95,38 @@ class OCRReader:
             return "", 0.0
 
         if self._use_crnn:
-            return self._plate_reader.read(plate_crop_bgr)
+            return self._plate_reader.read(self._mask_orange(plate_crop_bgr))
         if self._use_easyocr:
             return self._read_easyocr(plate_crop_bgr)
         return self._read_custom(plate_crop_bgr)
+
+    @staticmethod
+    def _mask_orange(crop: np.ndarray) -> np.ndarray:
+        """
+        Replace orange pixels (Florida plate graphic) with white before CRNN.
+
+        The FL orange graphic sits in the center of the plate and causes the
+        CRNN to hallucinate 1-2 phantom characters. Masking it to white gives
+        the model a neutral gap it can skip over rather than trying to decode.
+
+        Only pixels that are:
+          - Orange hue  (10–22 in OpenCV 0–180 scale, i.e. ~20–44° real)
+          - High saturation (> 130) — rules out washed-out beige/tan surfaces
+          - Reasonable brightness (> 90)  — rules out dark shadows
+        are replaced. Everything else (green chars, white bg, black border)
+        is untouched.
+
+        No dilation is applied — keeping the mask tight prevents it from
+        bleeding into adjacent green characters on large FL graphics.
+        """
+        hsv  = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+        mask = cv2.inRange(hsv,
+                           np.array([10, 130,  90], dtype=np.uint8),
+                           np.array([22, 255, 255], dtype=np.uint8))
+
+        result = crop.copy()
+        result[mask > 0] = (255, 255, 255)
+        return result
 
     # ── EasyOCR path ────────────────────────────────────────────────────────
 

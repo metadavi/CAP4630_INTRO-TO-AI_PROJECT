@@ -43,11 +43,11 @@ MAX_PLATE_CHARS     = 7         # Maximum — US plates are 5-7 chars (8+ is ove
 MIN_UNIQUE_CHARS    = 3         # Reject readings whose characters are all the same (e.g. IIIIII)
 
 # ── Multi-frame Voting ─────────────────────────────────────────────────────
-VOTE_WINDOW         = 8         # Accumulate this many frames before deciding
+VOTE_WINDOW         = 6         # Accumulate this many frames before deciding (was 8)
 VOTE_MIN_HITS       = 2         # Plate string must appear ≥ this many times
 VOTE_CONF_THRESHOLD = 0.45      # Aggregated confidence → ALLOWED (EasyOCR scores differ)
-VOTE_FUZZY_DIST     = 2         # Max edit distance to group similar readings as one plate
-VOTE_COOLDOWN_SECS  = 5.0       # Seconds to pause processing after a decision fires
+VOTE_FUZZY_DIST     = 3         # Max edit distance to group similar readings (was 2 — increased to handle FL orange graphic phantom char)
+VOTE_COOLDOWN_SECS  = 6.0       # Seconds to pause processing after a decision fires (gives user time to read/click)
 
 # ── Access Control ─────────────────────────────────────────────────────────
 UNCERTAIN_THRESHOLD = 0.40      # Below this → UNCERTAIN (not DENIED)
@@ -61,8 +61,8 @@ TRAIN_SPLIT         = 0.80      # 80 % train, 20 % validation
 
 # ── Display ────────────────────────────────────────────────────────────────
 SHOW_WINDOW         = True
-FRAME_SKIP          = 2         # Process every Nth frame (1 = every frame)
-BBOX_SMOOTH_ALPHA   = 0.5       # EMA weight for bbox smoothing (0=frozen, 1=raw)
+FRAME_SKIP          = 1         # Process every Nth frame (was 2 — process every frame for faster voting)
+BBOX_SMOOTH_ALPHA   = 0.3       # EMA weight for bbox smoothing (was 0.5 — lower = less jitter)
 
 # ── Gatekeeper Mode ───────────────────────────────────────────────────────
 GATEKEEPER_MODE       = True        # Enable interactive registration prompts

@@ -216,6 +216,17 @@ class PlateReader:
         """BGR crop → normalised (1,1,32,128) tensor on device."""
         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
 
+        # Upscale small crops before CLAHE so character edges are sharp.
+        # Distant/small plates arrive as tiny crops (e.g. 30×90px) — resizing
+        # directly to 32×128 loses edge detail. Upscaling to at least 64×200
+        # first preserves stroke sharpness before the final resize.
+        h, w = gray.shape[:2]
+        if w < 200 or h < 64:
+            scale = max(200 / w, 64 / h)
+            gray  = cv2.resize(gray,
+                               (int(w * scale), int(h * scale)),
+                               interpolation=cv2.INTER_CUBIC)
+
         # CLAHE for contrast normalisation (handles green FL text)
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4, 4))
         gray  = clahe.apply(gray)

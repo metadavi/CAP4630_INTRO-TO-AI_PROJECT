@@ -87,7 +87,8 @@ def on_frame(data):
         return                          # still processing previous frame
 
     if time.time() < _cooldown.get(sid, 0.0):
-        return                          # in cooldown after a decision
+        emit("result", {"status": "scanning"})   # tell UI we're actively resetting
+        return
 
     _busy[sid] = True
     try:

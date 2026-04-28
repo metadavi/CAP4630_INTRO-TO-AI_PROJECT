@@ -67,7 +67,6 @@ The core of the recognition system is a Convolutional Recurrent Neural Network (
 | Dataset | Source | Used For |
 |---|---|---|
 | Car Plate Detection | [Kaggle — andrewmvd](https://www.kaggle.com/datasets/andrewmvd/car-plate-detection) | Plate detector training |
-| LP Character Recognition | [Kaggle — francescopettini](https://www.kaggle.com/datasets/francescopettini/license-plate-characters-detection-ocr/data) | Char classifier training |
 | License Plate Recognition v11 | [Roboflow Universe](https://universe.roboflow.com/roboflow-universe-projects/license-plate-recognition-rxg4e) — CC BY 4.0 | Plate detector training |
 | Synthetic FL plates (~15,000) | Self-generated (`train/generate_florida_plates.py`) | CRNN training |
 | Self-collected real photos (~502) | Neighborhood + parking garage (manually labeled) | CRNN training |

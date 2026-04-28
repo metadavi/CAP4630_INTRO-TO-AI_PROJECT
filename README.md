@@ -5,7 +5,7 @@
 
 This project develops an AI Vehicle Access Control system for automated license plate recognition and secure site authentication. Using a hybrid pipeline of CNN-based detection and CRNN-based sequence recognition, the model achieves **88.04% character accuracy** and **84.82% exact-match accuracy**, providing a reliable and auditable solution for real-world gatekeeper management.
 
-[Demo]()
+[Project Demo](https://drive.google.com/file/d/1vgRKm0vqvzAzWvc9g2VwZfNMzQC67nhP/view)
 
 ## Project Objectives
 
